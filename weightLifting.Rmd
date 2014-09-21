@@ -1,0 +1,61 @@
+---
+title: "Weight Lifting Classification"
+author: "Matthew M Steele"
+date: "09/21/2014"
+output: html_document
+---
+```{r, echo=FALSE, message=FALSE}
+library(caret)
+```
+## Introduction
+In this work I present a predictive modeling analysis of the [Weight Lifting Exercise Dataset](http://groupware.les.inf.puc-rio.br/work.jsf?p1=10335) of Ugliano et al. (hereafter WLE.)  This data set is comprised of a set of positional and kinematic sensors attached to a human subject to record position and motion during a series of weight lifting exercises.  In this analysis I construct a predictive model to identify the class of exercise being performed using the the sensor inputs.
+
+## Prediction Model and Analysis
+```{r}
+dataIn <- read.csv('pml-training.csv')
+testIn <- read.csv('pml-testing.csv')
+```
+In a raw form the WLE data set is comprised of `r ncol(dataIn)` features containing `r nrow(dataIn)` entries. As a first step in constructing the model it must be determined what subset of these features have potential predictive power.  As a first pass the features which have large numbers of missing values are removed.
+
+```{r}
+naFrac <- function(x){length(na.omit(x))/length(x)}
+checknaFrac <- sapply(dataIn,naFrac)
+featureNames <- names(checknaFrac[checknaFrac>0.8])
+```
+
+Next, we eliminate the features that are aggregate calculations over groups of measurements, as they do not have predictive power for individual entries. This includes removing skewness, kurtosis, amplitude, and minimum and maximum features.
+
+```{r}
+indexTmp <- grep("skewness|kurtosis|amplitude|min|max",featureNames,invert=TRUE)
+featureNames <- featureNames[indexTmp]
+```
+
+Finally, we remove the unique identifier features, as the also will not contribute any predictive power, as the are not generalizable.
+```{r}
+indexTmp <- grep("window|timestamp|user|X",featureNames,invert=TRUE)
+featureNames <- featureNames[indexTmp]
+```
+
+After these features are removed we are left with `r length(featureNames)` usable features.
+
+To construct the prediction model a small random forest (10 trees) is adopted. For purposes of cross-validation and in order to estimate out-of-sample errors bootstrap re-sampling is performed with 25 samples with the sample sized equal to that of the full data set.
+```{r, cache=TRUE}
+set.seed(174)
+modelfit <- train(classe ~ ., data=dataIn[featureNames], method="rf",ntree=10)
+```
+
+The results of the model fitting procedure along with the accuracy estimates from the bootstrap re-sampling are given as follows.
+```{r}
+modelfit
+```
+
+## Conclusion and Discussion
+
+The out-of-sample error produced by the above bootstrap re-sampling are necessarily optimistic overestimates of the the accuracy of the model. Nonetheless is it reasonable to expect this prediction model is capable of classifying the type of exercise being performed at a with accuracy percentages no worse than the mid 90 percent level.  To further test this claim an independent test set may be evaluated, such as the one given in the WLE testing set.
+
+```{r}
+lFN <- length(featureNames)
+predOut <- predict(modelfit,testIn[featureNames[1:(lFN-1)]])
+```
+
+When checked against the reference classifications the exercises in this admittedly small set were identified with 100 % accuracy.
